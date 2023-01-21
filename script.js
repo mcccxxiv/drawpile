@@ -1,93 +1,89 @@
+var toolType = 'dot';
+var widthSlider;
+var colorInput = document.querySelector('#color');
+
 var config = {
   apiKey: "APIKEY HERE",
   authDomain: "AUTHDOMAIN HERE",
   databaseURL: "DATABASEURL HERE",
-  storageBucket: "STORAGE BUCKET HERE",
+  storageBucket: "STORAGEBUCKET HERE"
 };
-
 firebase.initializeApp(config);
 
 var pointsData = firebase.database().ref();
 var points = [];
 
-window.onload = function () {
+function setup() {
+  var canvas = createCanvas(windowWidth, windowHeight);
+  background(255);
+  fill(0);
 
-  // definitions
-  var canvas = document.getElementById("canvas");
-  var context = canvas.getContext("2d");
-  var boundings = canvas.getBoundingClientRect();
-  var range = document.getElementById("brush").value;
-
-  // specifications
-  var mouseX = 0;
-  var mouseY = 0;
-  var isDrawing = false;
-  context.strokeStyle = 'black'; // initial color
-
-  // brush size
-  var brush = document.getElementById('brush');
-
-  brush.addEventListener('input', function(brush){
-    context.lineWidth = brush.target.value;
+  widthSlider = createSlider(1, 10, 3);
+  widthSlider.position(5, 80);
+  
+  pointsData.on("child_removed", function () {
+    points = [];
   });
-
-  // Handle Colors
-  var colors = document.getElementsByClassName('colors')[0];
-
-  colors.addEventListener('click', function(event) {
-    context.strokeStyle = event.target.value || 'black';
+  pointsData.on("child_added", function (point) {
+    points.push(point.val());
   });
-
-  // mouse down Event
-  canvas.addEventListener('mousedown', function(event) {
-    setMouseCoordinates(event);
-    isDrawing = true;
-
-    // start drawing
-    context.beginPath();
-    context.moveTo(mouseX, mouseY);
+  canvas.mousePressed(drawPoint);
+  canvas.mouseReleased(function () {
+    pointsData.push({type: "release"});
   });
-
-  // mouse move event
-  canvas.addEventListener('mousemove', function(event) {
-    setMouseCoordinates(event);
-
-    if(isDrawing){
-      context.lineTo(mouseX, mouseY);
-      context.stroke();
+  canvas.mouseMoved(function () {
+    if (mouseIsPressed) {
+      drawPoint();
     }
   });
+}
 
-  // mouse up event
-  canvas.addEventListener('mouseup', function(event) {
-    setMouseCoordinates(event);
-    isDrawing = false;
-  });
-
-  // mouse coordinates
-  function setMouseCoordinates(event) {
-    mouseX = event.clientX - boundings.left;
-    mouseY = event.clientY - boundings.top;
+function draw() {
+  background(255);
+  for (var i = 0; i < points.length; i++) {
+    var point = points[i];
+    fill(point.color || '#000000')
+    if (point.type == "dot") {
+      strokeWeight(0);
+      ellipse(point.x, point.y, point.width, point.width);
+    } else if (i > 0 && point.type == "line" && points[i - 1].type == "line") {
+      var previous = points[i - 1];
+      stroke(point.color || '#000000')
+      strokeWeight(point.width);
+      line(point.x, point.y, previous.x, previous.y);
+    }
   }
+}
 
-  // clear button
-  var clearButton = document.getElementById('clear');
+function keyPressed() {
+  if (keyCode == "72") {
+    help();
+  } else if (keyCode == "68") {
+    toolType = "dot";
+  } else if (keyCode == "76") {
+    toolType = "line";
+  }
+}
 
-  clearButton.addEventListener('click', function() {
-    context.clearRect(0, 0, canvas.width, canvas.height);
-  });
+function drawPoint() {
+  pointsData.push({type: toolType,
+                   x: mouseX,
+                   y: mouseY,
+                   color: colorInput.value,
+                   width: widthSlider.value()});
+}
 
-  // save button
-  var saveButton = document.getElementById('save');
+// clear button
+$("#clear").on("click", clear);
 
-  saveButton.addEventListener('click', function() {
-    var imageName = prompt('Save as:');
-    var canvasDataURL = canvas.toDataURL();
-    var a = document.createElement('a');
-    a.href = canvasDataURL;
-    a.download = imageName || 'drawing';
-    a.click();
-  });
-  
-};
+function clear() {
+  pointsData.remove();
+  points = [];
+}
 
+// save button
+$("#save").on("click", save);
+
+function save() {
+  saveCanvas(window.prompt("Save as:", "Drawpile"));
+}
